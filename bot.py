@@ -11,15 +11,16 @@ MQTT_PORT = 8883
 MQTT_USER = "Esk8_63"
 MQTT_PASS = "Esk8_63000"
 
-# Topics Meshtastic 2.7.x
-TOPIC_IN = "MshNdEsk8t/2/json/#"     # uplink mesh → MQTT
-TOPIC_CMD = "MshNdEsk8t/2/cmd"       # downlink MQTT → mesh
+TOPIC_IN = "MshNdEsk8t/2/json/#"
+TOPIC_CMD = "MshNdEsk8t/2/cmd"
 
 TELEGRAM_TOKEN = "8871950569:AAE9N6SJcmJ9nlL9yztebszlE7nvZTMIym0"
-CHAT_ID = 8950301568  # ex: 123456789
+CHAT_ID = 8950301568
+
+mqtt_client = None  # global
 
 # -----------------------------
-# TELEGRAM → MQTT (send to mesh)
+# TELEGRAM → MQTT
 # -----------------------------
 def handle_telegram(update, context):
     text = update.message.text
@@ -34,26 +35,26 @@ def handle_telegram(update, context):
     print(f"[BOT] Message envoyé au mesh : {text}")
 
 # -----------------------------
-# MQTT → TELEGRAM (uplink)
+# MQTT → TELEGRAM
 # -----------------------------
 def on_mqtt_message(client, userdata, msg):
+    bot = userdata["bot"]
+
     try:
         data = json.loads(msg.payload.decode())
     except:
         return
 
-    # On ne prend que les messages texte
     if "decoded" in data and "text" in data["decoded"]:
         text = data["decoded"]["text"]
-        context = userdata["tg_context"]
-        context.bot.send_message(chat_id=CHAT_ID, text=f"[Mesh] {text}")
+        bot.send_message(chat_id=CHAT_ID, text=f"[Mesh] {text}")
         print(f"[MQTT] Reçu du mesh : {text}")
 
 # -----------------------------
 # MQTT SETUP
 # -----------------------------
-def setup_mqtt(tg_context):
-    client = mqtt.Client(userdata={"tg_context": tg_context})
+def setup_mqtt(bot):
+    client = mqtt.Client(userdata={"bot": bot})
 
     client.username_pw_set(MQTT_USER, MQTT_PASS)
 
@@ -70,6 +71,8 @@ def setup_mqtt(tg_context):
 # MAIN
 # -----------------------------
 def main():
+    global mqtt_client
+
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dp = updater.dispatcher
 
