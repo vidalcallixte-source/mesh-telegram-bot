@@ -62,9 +62,15 @@ def setup_mqtt(bot):
     client.tls_insecure_set(False)
 
     client.on_message = on_mqtt_message
-    client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.subscribe(TOPIC_IN)
 
+    def on_connect(client, userdata, flags, rc):
+        print("[MQTT] Connecté au broker")
+        client.subscribe(TOPIC_IN)
+        print(f"[MQTT] Abonné à {TOPIC_IN}")
+
+    client.on_connect = on_connect
+
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
     return client
 
 # -----------------------------
