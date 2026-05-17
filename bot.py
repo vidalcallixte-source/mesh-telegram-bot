@@ -15,8 +15,8 @@ MQTT_PASS = "Esk8_63000"
 TOPIC_IN = "MshNdEsk8t/2/json/#"     # uplink mesh → MQTT
 TOPIC_CMD = "MshNdEsk8t/2/cmd"       # downlink MQTT → mesh
 
-TELEGRAM_TOKEN = "TON_TOKEN_TELEGRAM_ICI"
-CHAT_ID = TON_CHAT_ID_ICI  # ex: 123456789
+TELEGRAM_TOKEN = "8871950569:AAE9N6SJcmJ9nlL9yztebszlE7nvZTMIym0"
+CHAT_ID = 8950301568  # ex: 123456789
 
 # -----------------------------
 # TELEGRAM → MQTT (send to mesh)
