@@ -20,11 +20,11 @@ jobs:
 
     - name: Install dependencies
       run: pip install -r requirements.txt
-     - name: Debug MQTT_PORT
+
+    - name: Debug MQTT_PORT
       env:
         MQTT_PORT: ${{ secrets.MQTT_PORT }}
       run: echo "MQTT_PORT=[$MQTT_PORT]"
-
 
     - name: Run bot
       env:
