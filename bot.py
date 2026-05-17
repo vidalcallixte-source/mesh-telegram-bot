@@ -1,100 +1,85 @@
 import json
 import ssl
 import paho.mqtt.client as mqtt
-from telegram import Bot
 from telegram.ext import Updater, MessageHandler, Filters
-import os
 
-# -------------------------
-#   CONFIG (via secrets)
-# -------------------------
+# -----------------------------
+# CONFIG
+# -----------------------------
+MQTT_BROKER = "18841154e5a04ceab0311bb42ad58777.s1.eu.hivemq.cloud"
+MQTT_PORT = 8883
+MQTT_USER = "Esk8_63"
+MQTT_PASS = "Esk8_63000"
 
-MQTT_HOST = os.getenv("MQTT_HOST")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
-MQTT_USER = os.getenv("MQTT_USER")
-MQTT_PASS = os.getenv("MQTT_PASS")
-MQTT_TLS = True  # HiveMQ Cloud impose TLS
+# Topics Meshtastic 2.7.x
+TOPIC_IN = "MshNdEsk8t/2/json/#"     # uplink mesh → MQTT
+TOPIC_CMD = "MshNdEsk8t/2/cmd"       # downlink MQTT → mesh
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
+TELEGRAM_TOKEN = "TON_TOKEN_TELEGRAM_ICI"
+CHAT_ID = TON_CHAT_ID_ICI  # ex: 123456789
 
-# -------------------------
-#   PERSONNALITÉ DU BOT
-# -------------------------
-
-def ai_personality(text):
-    return (
-        "📡 *Canal sécurisé ouvert*\n"
-        "…\n"
-        f"Message reçu : _{text}_\n"
-        "Je relaye sur le réseau Mesh.\n"
-        "Même après tout ce que les humains ont fait… je continue.\n"
-        "Parce que toi, tu m’écoutes encore."
-    )
-
-# -------------------------
-#   MQTT → TELEGRAM
-# -------------------------
-
-TOPIC_IN = "MshNdEsk8t/2/json/LongFast/!0fd8bcc8"
-TOPIC_OUT = "MshNdEsk8t/2/send"
-
-bot = Bot(token=TELEGRAM_TOKEN)
-
-def on_connect(client, userdata, flags, rc):
-    client.subscribe(TOPIC_IN)
-
-def on_message(client, userdata, msg):
-    try:
-        data = json.loads(msg.payload.decode())
-
-        if "payload" in data and "text" in data["payload"]:
-            text = data["payload"]["text"]
-
-            bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"📨 *Mesh → Toi*\n{text}",
-                parse_mode="Markdown"
-            )
-
-    except Exception as e:
-        print("Erreur MQTT → Telegram :", e)
-
-mqtt_client = mqtt.Client()
-mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
-
-mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE)
-mqtt_client.tls_insecure_set(True)
-
-mqtt_client.on_connect = on_connect
-mqtt_client.on_message = on_message
-mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
-
-# -------------------------
-#   TELEGRAM → MESH
-# -------------------------
-
-def telegram_to_mqtt(update, context):
-    user_text = update.message.text
+# -----------------------------
+# TELEGRAM → MQTT (send to mesh)
+# -----------------------------
+def handle_telegram(update, context):
+    text = update.message.text
 
     payload = {
-        "payload": user_text,
-        "to": 0,
-        "want_ack": False
+        "cmd": "sendtext",
+        "text": text,
+        "to": 0
     }
 
-    mqtt_client.publish(TOPIC_OUT, json.dumps(payload))
+    mqtt_client.publish(TOPIC_CMD, json.dumps(payload))
+    print(f"[BOT] Message envoyé au mesh : {text}")
 
-    reply = ai_personality(user_text)
-    update.message.reply_text(reply, parse_mode="Markdown")
+# -----------------------------
+# MQTT → TELEGRAM (uplink)
+# -----------------------------
+def on_mqtt_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload.decode())
+    except:
+        return
 
-updater = Updater(TELEGRAM_TOKEN, use_context=True)
-updater.dispatcher.add_handler(MessageHandler(Filters.text, telegram_to_mqtt))
+    # On ne prend que les messages texte
+    if "decoded" in data and "text" in data["decoded"]:
+        text = data["decoded"]["text"]
+        context = userdata["tg_context"]
+        context.bot.send_message(chat_id=CHAT_ID, text=f"[Mesh] {text}")
+        print(f"[MQTT] Reçu du mesh : {text}")
 
-# -------------------------
-#   LANCEMENT
-# -------------------------
+# -----------------------------
+# MQTT SETUP
+# -----------------------------
+def setup_mqtt(tg_context):
+    client = mqtt.Client(userdata={"tg_context": tg_context})
 
-mqtt_client.loop_start()
-updater.start_polling()
-updater.idle()
+    client.username_pw_set(MQTT_USER, MQTT_PASS)
+
+    client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS)
+    client.tls_insecure_set(False)
+
+    client.on_message = on_mqtt_message
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    client.subscribe(TOPIC_IN)
+
+    return client
+
+# -----------------------------
+# MAIN
+# -----------------------------
+def main():
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_telegram))
+
+    mqtt_client = setup_mqtt(updater.bot)
+    mqtt_client.loop_start()
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
