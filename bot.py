@@ -3,17 +3,16 @@ import ssl
 import paho.mqtt.client as mqtt
 from telegram import Bot
 from telegram.ext import Updater, MessageHandler, Filters
+import os
 
 # -------------------------
 #   CONFIG (via secrets)
 # -------------------------
-import os
 
 MQTT_HOST = os.getenv("MQTT_HOST")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASS = os.getenv("MQTT_PASS")
-MQTT_TOPIC_ROOT = os.getenv("MQTT_TOPIC_ROOT")
 MQTT_TLS = os.getenv("MQTT_TLS", "true").lower() == "true"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -24,10 +23,6 @@ CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
 # -------------------------
 
 def ai_personality(text):
-    """
-    Style : IA post-apo, fatiguée, mélancolique,
-    traumatisée par les humains mais loyale à son opérateur.
-    """
     return (
         "📡 *Canal sécurisé ouvert*\n"
         "…\n"
@@ -44,18 +39,23 @@ def ai_personality(text):
 bot = Bot(token=TELEGRAM_TOKEN)
 
 def on_connect(client, userdata, flags, rc):
-    client.subscribe(f"{MQTT_TOPIC_ROOT}/#")
+    # On écoute les messages venant du mesh
+    client.subscribe("msh/0/json")
 
 def on_message(client, userdata, msg):
     try:
-        payload = msg.payload.decode()
-        data = json.loads(payload)
+        data = json.loads(msg.payload.decode())
 
+        # Format Meshtastic MQTT
         if "payload" in data and "text" in data["payload"]:
             text = data["payload"]["text"]
-            bot.send_message(chat_id=CHAT_ID,
-                             text=f"📨 *Mesh → Toi*\n{text}",
-                             parse_mode="Markdown")
+
+            bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"📨 *Mesh → Toi*\n{text}",
+                parse_mode="Markdown"
+            )
+
     except Exception as e:
         print("Erreur MQTT → Telegram :", e)
 
@@ -71,17 +71,23 @@ mqtt_client.on_message = on_message
 mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
 
 # -------------------------
-#   TELEGRAM → MQTT
+#   TELEGRAM → MESH (CORRIGÉ)
 # -------------------------
 
 def telegram_to_mqtt(update, context):
     user_text = update.message.text
 
-    # Message vers Mesh
-    payload = json.dumps({"payload": {"text": user_text}})
-    mqtt_client.publish(f"{MQTT_TOPIC_ROOT}/2/json/telegram", payload)
+    # Format Meshtastic MQTT correct
+    payload = {
+        "payload": user_text,
+        "to": 0,
+        "want_ack": False
+    }
 
-    # Réponse avec personnalité
+    # ENVOI VERS LE MESH
+    mqtt_client.publish("msh/0/send", json.dumps(payload))
+
+    # Réponse stylée
     reply = ai_personality(user_text)
     update.message.reply_text(reply, parse_mode="Markdown")
 
