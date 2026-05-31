@@ -1,7 +1,13 @@
+# ---------------------------------------------
+# 2026-05-31 21h50  --  BLOCK 001 --------------
+# ---------------------------------------------
+
 import os
 import json
 import ssl
 import random
+import time
+import threading
 import paho.mqtt.client as mqtt
 from telegram.ext import Updater, MessageHandler, Filters
 
@@ -13,10 +19,15 @@ MQTT_PORT = int(os.getenv("MQTT_PORT"))
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASS = os.getenv("MQTT_PASS")
 
-# ex: MshNdEsk8t/2
+# Root EXACT du module Meshtastic (sensible à la casse)
+# ex: MshNdEsk8t
 TOPIC_ROOT = os.getenv("MQTT_TOPIC_ROOT")
-TOPIC_IN = TOPIC_ROOT + "/#"            # ex: MshNdEsk8t/2/#
-TOPIC_CMD = TOPIC_ROOT + "/json/send"   # ex: MshNdEsk8t/2/json/send
+
+# Mesh → Telegram
+TOPIC_IN = TOPIC_ROOT + "/#"
+
+# Telegram → Mesh (topic officiel Meshtastic)
+TOPIC_CMD = TOPIC_ROOT + "/json/send"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
@@ -92,7 +103,6 @@ def on_mqtt_message(client, userdata, msg):
         if text.startswith("[TG:"):
             return
 
-        # Identification de l’appareil : sender (ID Meshtastic) ou from (numéro de nœud)
         sender_id = data.get("sender") or data.get("from")
         sender_str = f"{sender_id}" if sender_id is not None else "unknown"
 
@@ -124,10 +134,21 @@ def setup_mqtt(bot):
     return client
 
 # -----------------------------
+# AUTO-REBOOT DU BOT (toutes les 5h)
+# -----------------------------
+def auto_reboot():
+    time.sleep(18000)  # 5 heures = 18 000 sec
+    print("♻️ Auto-reboot du bot…")
+    os._exit(0)
+
+# -----------------------------
 # MAIN
 # -----------------------------
 def main():
     global mqtt_client
+
+    # Thread reboot
+    threading.Thread(target=auto_reboot, daemon=True).start()
 
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -142,3 +163,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ---------------------------------------------
+# 2026-05-31 21h50  --  END BLOCK 001 ----------
+# ---------------------------------------------
