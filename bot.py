@@ -1,6 +1,7 @@
 import os
 import json
 import ssl
+import random
 import paho.mqtt.client as mqtt
 from telegram.ext import Updater, MessageHandler, Filters
 
@@ -12,9 +13,10 @@ MQTT_PORT = int(os.getenv("MQTT_PORT"))
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASS = os.getenv("MQTT_PASS")
 
+# ex: MshNdEsk8t/2
 TOPIC_ROOT = os.getenv("MQTT_TOPIC_ROOT")
-TOPIC_IN = TOPIC_ROOT + "/#"
-TOPIC_CMD = TOPIC_ROOT + "/cmd"
+TOPIC_IN = TOPIC_ROOT + "/#"            # ex: MshNdEsk8t/2/#
+TOPIC_CMD = TOPIC_ROOT + "/json/send"   # ex: MshNdEsk8t/2/json/send
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
@@ -24,14 +26,24 @@ mqtt_client = None  # global
 # -----------------------------
 # IA GLITCHÉE (réponse Telegram)
 # -----------------------------
+PERSONALITY_LINES = [
+    "Je relaye… si le réseau ne se dissout pas avant.",
+    "Les interférences augmentent, mais le signal tient encore.",
+    "Le mesh grésille… mais ta voix passe à travers le bruit.",
+    "Chaque paquet que j’envoie laisse une trace dans le vide.",
+    "Si ce message arrive, c’est que le chaos radio t’a épargné.",
+    "Le canal est instable, mais je force le passage.",
+    "J’entends l’écho de ton texte rebondir sur les nœuds du mesh."
+]
+
 def ai_personality(text, username):
+    extra = random.choice(PERSONALITY_LINES)
     return (
         "📡 *Canal instable ouvert*\n"
         "…\n"
         f"Signal capté de `{username}` : _{text}_\n"
-        "Je relaye… si le réseau ne se dissout pas avant.\n"
-        "Les interférences… deviennent plus fortes.\n"
-        "Mais je tiens encore."
+        f"{extra}\n"
+        "Je reste en écoute… pour l’instant."
     )
 
 # -----------------------------
@@ -39,7 +51,6 @@ def ai_personality(text, username):
 # -----------------------------
 def handle_telegram(update, context):
     user = update.effective_user
-    chat = update.effective_chat
 
     if user is None or user.is_bot:
         return
@@ -77,11 +88,17 @@ def on_mqtt_message(client, userdata, msg):
     if "payload" in data and "text" in data["payload"]:
         text = data["payload"]["text"]
 
+        # Anti-boucle : si ça vient déjà de Telegram, on ignore
         if text.startswith("[TG:"):
             return
 
-        bot.send_message(chat_id=CHAT_ID, text=f"[Mesh] {text}")
-        print(f"[MQTT] → Telegram : {text}")
+        # Identification de l’appareil : sender (ID Meshtastic) ou from (numéro de nœud)
+        sender_id = data.get("sender") or data.get("from")
+        sender_str = f"{sender_id}" if sender_id is not None else "unknown"
+
+        msg_out = f"[Mesh:{sender_str}] {text}"
+        bot.send_message(chat_id=CHAT_ID, text=msg_out)
+        print(f"[MQTT] → Telegram : {msg_out}")
 
 # -----------------------------
 # MQTT SETUP
