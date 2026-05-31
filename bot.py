@@ -1,21 +1,23 @@
+import os
 import json
 import ssl
 import paho.mqtt.client as mqtt
 from telegram.ext import Updater, MessageHandler, Filters
 
 # -----------------------------
-# CONFIG
+# CONFIG VIA GITHUB SECRETS
 # -----------------------------
-MQTT_BROKER = "18841154e5a04ceab0311bb42ad58777.s1.eu.hivemq.cloud"
-MQTT_PORT = 8883
-MQTT_USER = "Esk8_63"
-MQTT_PASS = "Esk8_63000"
+MQTT_BROKER = os.getenv("MQTT_HOST")
+MQTT_PORT = int(os.getenv("MQTT_PORT"))
+MQTT_USER = os.getenv("MQTT_USER")
+MQTT_PASS = os.getenv("MQTT_PASS")
 
-TOPIC_IN = "MshNdEsk8t/2/json/#"
-TOPIC_CMD = "MshNdEsk8t/2/cmd"
+TOPIC_ROOT = os.getenv("MQTT_TOPIC_ROOT")
+TOPIC_IN = TOPIC_ROOT + "/#"
+TOPIC_CMD = TOPIC_ROOT + "/cmd"
 
-TELEGRAM_TOKEN = "8871950569:AAE9N6SJcmJ9nlL9yztebszlE7nvZTMIym0"
-CHAT_ID = 8950301568   # ton chat privé, mais le bot fonctionnera aussi en groupe
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
 
 mqtt_client = None  # global
 
@@ -39,7 +41,6 @@ def handle_telegram(update, context):
     user = update.effective_user
     chat = update.effective_chat
 
-    # Sécurité : ignorer les bots, messages vides, messages système
     if user is None or user.is_bot:
         return
     if not update.message or not update.message.text:
@@ -48,7 +49,6 @@ def handle_telegram(update, context):
     text = update.message.text.strip()
     username = user.username or user.first_name or "???"
 
-    # Message envoyé au mesh avec tag Telegram
     mesh_text = f"[TG:{username}] {text}"
 
     payload = {
@@ -60,7 +60,6 @@ def handle_telegram(update, context):
     mqtt_client.publish(TOPIC_CMD, json.dumps(payload))
     print(f"[BOT] → Mesh : {mesh_text}")
 
-    # Réponse Telegram stylée
     reply = ai_personality(text, username)
     update.message.reply_text(reply, parse_mode="Markdown")
 
@@ -75,11 +74,9 @@ def on_mqtt_message(client, userdata, msg):
     except:
         return
 
-    # Meshtastic v2.x : texte dans data["payload"]["text"]
     if "payload" in data and "text" in data["payload"]:
         text = data["payload"]["text"]
 
-        # Anti-boucle : si le message vient déjà de Telegram, on ne renvoie pas
         if text.startswith("[TG:"):
             return
 
