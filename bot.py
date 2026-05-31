@@ -27,7 +27,7 @@ TOPIC_ROOT = os.getenv("MQTT_TOPIC_ROOT")
 TOPIC_IN = TOPIC_ROOT + "/#"
 
 # Telegram → Mesh (topic officiel Meshtastic)
-TOPIC_CMD = TOPIC_ROOT + "/json/send"
+TOPIC_CMD = TOPIC_ROOT + "/t/json/send"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID"))
